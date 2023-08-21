@@ -3,6 +3,10 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { DragControls } from "./DragControls";
+import {
+  CSS2DRenderer,
+  CSS2DObject,
+} from "three/addons/renderers/CSS2DRenderer.js";
 import Obj from "./obj";
 
 export default class Four {
@@ -11,6 +15,7 @@ export default class Four {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
+    this.cssRenderer = null
     this.controls = null; // 场景移动控制器
     this.transformControls = null;
     this.dragControls = null; // 拖拽控制器
@@ -19,6 +24,7 @@ export default class Four {
 
     this.init();
     this.initEvent();
+    this.initDrag();
     this.initDrag();
     this.animate();
   }
@@ -47,6 +53,15 @@ export default class Four {
     this.renderer.setSize(this.dom.clientWidth, this.dom.clientHeight);
     this.dom.appendChild(this.renderer.domElement);
 
+    // css渲染器
+    this.cssRenderer = new CSS2DRenderer();
+    this.cssRenderer.setSize(this.dom.clientWidth, this.dom.clientHeight);
+    this.cssRenderer.domElement.style.position = 'absolute';
+    this.cssRenderer.domElement.style.top = '0px';
+    this.cssRenderer.domElement.style.left = '0px';
+    this.cssRenderer.domElement.style['pointer-events'] = 'none';
+    this.dom.appendChild(this.cssRenderer.domElement);
+
     // 添加鼠标控制器
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableZoom = true;
@@ -71,12 +86,16 @@ export default class Four {
     this.scene.add(plane);
 
     // 放物体进来
-    let pos = [[0,0,0],[10,0,0],[0,0,10]]
+    let pos = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [0, 0, 10],
+    ];
     for (let p of pos) {
-      let obj = new Obj(...p)
-      this.objs.push(obj)
+      let obj = new Obj(...p);
+      this.objs.push(obj);
       this.scene.add(obj);
-    } 
+    }
   }
 
   initEvent() {
@@ -108,13 +127,29 @@ export default class Four {
           }
         };
         if (this.curObj) {
-            batchSetBorderVisible(this.curObj.children,false)
-          }
+          batchSetBorderVisible(this.curObj.children, false);
+        }
         if (object) {
-          batchSetBorderVisible(object.children,true)
-          this.curObj = object
+          batchSetBorderVisible(object.children, true);
+          this.curObj = object;
+
+          const labelDiv = document.createElement('div');
+          labelDiv.innerHTML = '123321'
+          labelDiv.style.width = 100;
+          labelDiv.style.height = 100;
+          labelDiv.style.pointerEvents = 'none';
+          // labelDiv.style.backgroundColor = "#888888";
+          const labelObject = new CSS2DObject(labelDiv);
+          // labelObject.position.set(3, 0, 0);
+          // labelObject.center.set(0, 0);
+          var pos1 = new THREE.Vector3();
+          this.curObj.getWorldPosition(pos1);//获取obj世界坐标、
+          pos1.y += 30;
+          labelObject.position.copy(pos1);//标签标注在obj世界坐标
+          console.log(labelDiv,labelObject);
+          this.scene.add(labelObject);
         } else {
-          this.curObj = null
+          this.curObj = null;
         }
       }
     };
@@ -125,12 +160,17 @@ export default class Four {
   }
 
   initDrag() {
+    const plane = new THREE.Plane();
+    const normal = new THREE.Vector3(0, 1, 0); // x-z平面的法线向量
+    const point = new THREE.Vector3(0, 0, 0); // 经过平面的点
+    plane.setFromNormalAndCoplanarPoint(normal, point);
     this.dragControls = new DragControls(
       this.objs,
       this.camera,
-      this.renderer.domElement
+      this.renderer.domElement,
+      plane
     );
-    this.dragControls.transformGroup = true;
+    // this.dragControls.transformGroup = true;
     // 拖拽
     this.dragControls.addEventListener("dragstart", (e) => {
       console.log(e);
@@ -152,12 +192,12 @@ export default class Four {
     // hover
     this.dragControls.addEventListener("hoveron", (e) => {
       if (e.object.isHoverBox) {
-        e.object.visible = true
+        e.object.visible = true;
       }
     });
     this.dragControls.addEventListener("hoveroff", (e) => {
       if (e.object.isHoverBox) {
-        e.object.visible = false
+        e.object.visible = false;
       }
     });
   }
@@ -166,5 +206,7 @@ export default class Four {
     requestAnimationFrame(() => this.animate());
     // 渲染场景
     this.renderer.render(this.scene, this.camera);
+    // this.cssRenderer.render(this.scene, this.camera);
   }
 }
+
