@@ -15,7 +15,7 @@ export default class Four {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
-    this.cssRenderer = null
+    this.cssRenderer = null;
     this.controls = null; // 场景移动控制器
     this.transformControls = null;
     this.dragControls = null; // 拖拽控制器
@@ -56,15 +56,17 @@ export default class Four {
     // css渲染器
     this.cssRenderer = new CSS2DRenderer();
     this.cssRenderer.setSize(this.dom.clientWidth, this.dom.clientHeight);
-    this.cssRenderer.domElement.style.position = 'absolute';
-    this.cssRenderer.domElement.style.top = '0px';
-    this.cssRenderer.domElement.style.left = '0px';
-    this.cssRenderer.domElement.style['pointer-events'] = 'none';
+    this.cssRenderer.domElement.style.position = "absolute";
+    this.cssRenderer.domElement.style.top = "0px";
+    this.cssRenderer.domElement.style.left = "0px";
+    this.cssRenderer.domElement.style["pointer-events"] = "none";
     this.dom.appendChild(this.cssRenderer.domElement);
 
     // 添加鼠标控制器
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableZoom = true;
+    this.controls.enableKeys = true;
+    this.controls.dampingFactor = true;
 
     // 添加变换控制器
     this.transformControls = new TransformControls(
@@ -90,6 +92,7 @@ export default class Four {
       [0, 0, 0],
       [10, 0, 0],
       [0, 0, 10],
+      [10, 0, 5],
     ];
     for (let p of pos) {
       let obj = new Obj(...p);
@@ -119,35 +122,31 @@ export default class Four {
         // 选取第一个可拖拽物体并对其执行交互
         let object = intersects.find((val) => val.object.isObj)?.object;
         console.log("objects:", intersects, object);
-        const batchSetBorderVisible = (children, show) => {
-          for (let child of children) {
+        const batchSetChildrenVisible = (obj, show) => {
+          for (let child of obj.children) {
+            // 设置选中时外边框的显隐
             if (child.isSelectBox) {
               child.visible = show;
+            }
+            if (!show && child.type === "Object3D") {
+              obj.remove(child);
             }
           }
         };
         if (this.curObj) {
-          batchSetBorderVisible(this.curObj.children, false);
+          batchSetChildrenVisible(this.curObj, false);
         }
         if (object) {
-          batchSetBorderVisible(object.children, true);
+          batchSetChildrenVisible(object, true);
           this.curObj = object;
 
-          const labelDiv = document.createElement('div');
-          labelDiv.innerHTML = '123321'
-          labelDiv.style.width = 100;
-          labelDiv.style.height = 100;
-          labelDiv.style.pointerEvents = 'none';
-          // labelDiv.style.backgroundColor = "#888888";
+          const labelDiv = document.createElement("div");
+          labelDiv.innerHTML = "123321";
+          labelDiv.style.pointerEvents = "none";
+          labelDiv.style.backgroundColor = "#888888";
           const labelObject = new CSS2DObject(labelDiv);
-          // labelObject.position.set(3, 0, 0);
-          // labelObject.center.set(0, 0);
-          var pos1 = new THREE.Vector3();
-          this.curObj.getWorldPosition(pos1);//获取obj世界坐标、
-          pos1.y += 30;
-          labelObject.position.copy(pos1);//标签标注在obj世界坐标
-          console.log(labelDiv,labelObject);
-          this.scene.add(labelObject);
+          labelObject.position.set(0, 2, 0);
+          this.curObj.add(labelObject);
         } else {
           this.curObj = null;
         }
@@ -157,6 +156,13 @@ export default class Four {
     document.addEventListener("mousemove", onDocumentMouseMove, false);
     // 绑定点击事件
     document.addEventListener("click", onDocumentClick, false);
+    document.addEventListener(
+      "pointerup",
+      (e) => {
+        console.log("pu:", e);
+      },
+      false
+    );
   }
 
   initDrag() {
@@ -206,7 +212,6 @@ export default class Four {
     requestAnimationFrame(() => this.animate());
     // 渲染场景
     this.renderer.render(this.scene, this.camera);
-    // this.cssRenderer.render(this.scene, this.camera);
+    this.cssRenderer.render(this.scene, this.camera);
   }
 }
-
