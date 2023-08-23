@@ -2,30 +2,32 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
-import { DragControls } from "./DragControls";
+
 import {
   CSS2DRenderer,
   CSS2DObject,
 } from "three/addons/renderers/CSS2DRenderer.js";
+import {
+  CSS3DRenderer,
+  CSS3DObject,
+} from "three/examples/jsm/renderers/CSS3DRenderer.js";
 import Obj from "./obj";
-
+import SharpObj from "./sharpObj";
 export default class Four {
   constructor(dom) {
     this.dom = dom; // 外围dom元素
     this.scene = null;
     this.camera = null;
     this.renderer = null;
-    this.cssRenderer = null;
+    this.css2dRenderer = null;
+    this.css3dRenderer = null;
     this.controls = null; // 场景移动控制器
     this.transformControls = null;
-    this.dragControls = null; // 拖拽控制器
     this.objs = []; // 场景内全部obj
     this.curObj = null; // 当前选中object
 
     this.init();
     this.initEvent();
-    this.initDrag();
-    this.initDrag();
     this.animate();
   }
 
@@ -53,15 +55,20 @@ export default class Four {
     this.renderer.setSize(this.dom.clientWidth, this.dom.clientHeight);
     this.dom.appendChild(this.renderer.domElement);
 
-    // css渲染器
-    this.cssRenderer = new CSS2DRenderer();
-    this.cssRenderer.setSize(this.dom.clientWidth, this.dom.clientHeight);
-    this.cssRenderer.domElement.style.position = "absolute";
-    this.cssRenderer.domElement.style.top = "0px";
-    this.cssRenderer.domElement.style.left = "0px";
-    this.cssRenderer.domElement.style["pointer-events"] = "none";
-    this.dom.appendChild(this.cssRenderer.domElement);
-
+    const initRenderer = (renderer) => {
+      renderer.setSize(this.dom.clientWidth, this.dom.clientHeight);
+      renderer.domElement.style.position = "absolute";
+      renderer.domElement.style.top = "0px";
+      renderer.domElement.style.left = "0px";
+      renderer.domElement.style["pointer-events"] = "none";
+      this.dom.appendChild(renderer.domElement);
+    };
+    // css2d渲染器
+    this.css2dRenderer = new CSS2DRenderer();
+    initRenderer(this.css2dRenderer);
+    // css3d渲染器
+    this.css3dRenderer = new CSS3DRenderer();
+    initRenderer(this.css3dRenderer);
     // 添加鼠标控制器
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableZoom = true;
@@ -95,7 +102,8 @@ export default class Four {
       [10, 0, 5],
     ];
     for (let p of pos) {
-      let obj = new Obj(...p);
+      let obj = new SharpObj(...p, { renderer: this.renderer, controls: this.controls, camera: this.camera })
+      obj = obj.object
       this.objs.push(obj);
       this.scene.add(obj);
     }
@@ -123,14 +131,18 @@ export default class Four {
         let object = intersects.find((val) => val.object.isObj)?.object;
         console.log("objects:", intersects, object);
         const batchSetChildrenVisible = (obj, show) => {
+          const removeList = [];
           for (let child of obj.children) {
             // 设置选中时外边框的显隐
             if (child.isSelectBox) {
               child.visible = show;
             }
             if (!show && child.type === "Object3D") {
-              obj.remove(child);
+              removeList.push(child);
             }
+          }
+          for (let rObj of removeList) {
+            obj.remove(rObj);
           }
         };
         if (this.curObj) {
@@ -139,14 +151,27 @@ export default class Four {
         if (object) {
           batchSetChildrenVisible(object, true);
           this.curObj = object;
-
+          const size = Four.getBoundingSize(object);
+          // 2d
           const labelDiv = document.createElement("div");
-          labelDiv.innerHTML = "123321";
+          labelDiv.innerHTML = "2d标签";
           labelDiv.style.pointerEvents = "none";
           labelDiv.style.backgroundColor = "#888888";
           const labelObject = new CSS2DObject(labelDiv);
           labelObject.position.set(0, 2, 0);
           this.curObj.add(labelObject);
+          // 3d
+          object.showBottomArrow();
+          // const positionDiv = document.createElement("div");
+          // Object.assign(positionDiv.style, {
+          //   backgroundColor: "#888888",
+          //   height: "2px",
+          //   width: "2px",
+          //   pointerEvents: "none",
+          // });
+          // const posObject = new CSS3DObject(positionDiv);
+          // posObject.position.set(0, -size.y, 0);
+          // this.curObj.add(posObject);
         } else {
           this.curObj = null;
         }
@@ -165,53 +190,17 @@ export default class Four {
     );
   }
 
-  initDrag() {
-    const plane = new THREE.Plane();
-    const normal = new THREE.Vector3(0, 1, 0); // x-z平面的法线向量
-    const point = new THREE.Vector3(0, 0, 0); // 经过平面的点
-    plane.setFromNormalAndCoplanarPoint(normal, point);
-    this.dragControls = new DragControls(
-      this.objs,
-      this.camera,
-      this.renderer.domElement,
-      plane
-    );
-    // this.dragControls.transformGroup = true;
-    // 拖拽
-    this.dragControls.addEventListener("dragstart", (e) => {
-      console.log(e);
-      this.controls.enabled = false;
-      this.controls.enableZoom = false;
-    });
-    this.dragControls.addEventListener("dragend", (e) => {
-      this.controls.enabled = true;
-      this.controls.enableZoom = true;
-    });
-    this.dragControls.addEventListener("drag", function (e) {
-      // 获取模型的边界框
-      let boundingBox = new THREE.Box3().setFromObject(e.object);
-      // 获取边界框的尺寸
-      let size = new THREE.Vector3();
-      boundingBox.getSize(size);
-      e.object.position.y = size.y / 2;
-    });
-    // hover
-    this.dragControls.addEventListener("hoveron", (e) => {
-      if (e.object.isHoverBox) {
-        e.object.visible = true;
-      }
-    });
-    this.dragControls.addEventListener("hoveroff", (e) => {
-      if (e.object.isHoverBox) {
-        e.object.visible = false;
-      }
-    });
-  }
-
   animate() {
     requestAnimationFrame(() => this.animate());
     // 渲染场景
     this.renderer.render(this.scene, this.camera);
-    this.cssRenderer.render(this.scene, this.camera);
+    this.css2dRenderer.render(this.scene, this.camera);
+    this.css3dRenderer.render(this.scene, this.camera);
+  }
+  static getBoundingSize(obj) {
+    let boundingBox = new THREE.Box3().setFromObject(obj);
+    let size = new THREE.Vector3();
+    boundingBox.getSize(size);
+    return size;
   }
 }

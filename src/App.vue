@@ -5,7 +5,7 @@
 </template>
 
 <script setup>
-import Four from './four'
+import Four from './four/four'
 import { ref } from 'vue';
 const container = ref()
 onMounted(() => {
