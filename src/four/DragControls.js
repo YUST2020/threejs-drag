@@ -17,7 +17,8 @@ const _worldPosition = new Vector3(); // 创建三维向量对象，用于表示
 const _inverseMatrix = new Matrix4(); // 创建矩阵4对象，用于进行矩阵变换的逆矩阵
 
 class DragControls extends EventDispatcher {
-  constructor(_objects, _camera, _domElement, targetPlane) {
+  /*********** modify:增加targetPlane，moveAll参数 *******/
+  constructor(_objects, _camera, _domElement, targetPlane, moveAll) {
     super();
 
     _domElement.style.touchAction = "none"; // 禁用触摸滚动
@@ -65,11 +66,27 @@ class DragControls extends EventDispatcher {
 
       _raycaster.setFromCamera(_pointer, _camera); // 根据鼠标位置和相机创建射线
 
-      if (_selected) { // 如果有选中的物体
-        if (_raycaster.ray.intersectPlane(_plane, _intersection)) { // 射线与平面相交
-          _selected.position.copy( // 更新选中物体的位置
-            _intersection.sub(_offset).applyMatrix4(_inverseMatrix)
-          );
+      if (_selected) {
+        // 如果有选中的物体
+        if (_raycaster.ray.intersectPlane(_plane, _intersection)) {
+          /******* modify: 增加新老位置记录 */
+          const oldPosition = new Vector3();
+          oldPosition.copy(_selected.position);
+          const newPosition = _intersection
+            .sub(_offset)
+            .applyMatrix4(_inverseMatrix);
+          // 射线与平面相交
+          _selected.position.copy(newPosition);
+          /****** modify: 增加moveAll判定 */
+          if (moveAll) {
+            const sub = newPosition.sub(oldPosition);
+            for (let obj of _objects) {
+              // 非当前拖拽对象的对象全部移动当前拖拽对象的偏移量
+              if (obj !== _selected) {
+                obj.position.add(sub.clone());
+              }
+            }
+          }
         }
 
         scope.dispatchEvent({ type: "drag", object: _selected }); // 分发drag事件
@@ -79,39 +96,47 @@ class DragControls extends EventDispatcher {
 
       // hover支持
 
-      if (event.pointerType === "mouse" || event.pointerType === "pen") { // 如果是鼠标或者触摸笔事件
+      if (event.pointerType === "mouse" || event.pointerType === "pen") {
+        // 如果是鼠标或者触摸笔事件
         _intersections.length = 0; // 清空射线与物体的交点数组
 
         _raycaster.setFromCamera(_pointer, _camera); // 根据鼠标位置和相机创建射线
         _raycaster.intersectObjects(_objects, true, _intersections); // 射线与物体进行相交检测
 
-        if (_intersections.length > 0) { // 如果有相交的物体
+        if (_intersections.length > 0) {
+          // 如果有相交的物体
           const object = _intersections[0].object; // 获取第一个相交的物体
 
-          if (targetPlane) { // 如果有目标平面
+          /******* modify: 增加targetPlane判定 *******/
+          if (targetPlane) {
+            // 如果有目标平面
             _plane = targetPlane; // 使用目标平面
           } else {
-            _plane.setFromNormalAndCoplanarPoint( // 根据相机的朝向和物体的世界坐标创建平面
+            _plane.setFromNormalAndCoplanarPoint(
+              // 根据相机的朝向和物体的世界坐标创建平面
               _camera.getWorldDirection(_plane.normal),
               _worldPosition.setFromMatrixPosition(object.matrixWorld)
             );
           }
 
-          if (_hovered !== object && _hovered !== null) { // 如果当前悬停的物体不是相交的物体且不为空
+          if (_hovered !== object && _hovered !== null) {
+            // 如果当前悬停的物体不是相交的物体且不为空
             scope.dispatchEvent({ type: "hoveroff", object: _hovered }); // 分发hoveroff事件
 
             _domElement.style.cursor = "auto"; // 恢复鼠标样式
             _hovered = null; // 清空当前悬停的物体
           }
 
-          if (_hovered !== object) { // 如果当前悬停的物体不是相交的物体
+          if (_hovered !== object) {
+            // 如果当前悬停的物体不是相交的物体
             scope.dispatchEvent({ type: "hoveron", object: object }); // 分发hoveron事件
 
             _domElement.style.cursor = "pointer"; // 设置鼠标样式为指针
             _hovered = object; // 更新当前悬停的物体
           }
         } else {
-          if (_hovered !== null) { // 如果当前悬停的物体不为空
+          if (_hovered !== null) {
+            // 如果当前悬停的物体不为空
             scope.dispatchEvent({ type: "hoveroff", object: _hovered }); // 分发hoveroff事件
 
             _domElement.style.cursor = "auto"; // 恢复鼠标样式
@@ -132,20 +157,25 @@ class DragControls extends EventDispatcher {
 
       _raycaster.intersectObjects(_objects, true, _intersections); // 射线与物体进行相交检测
 
-      if (_intersections.length > 0) { // 如果有相交的物体
+      if (_intersections.length > 0) {
+        // 如果有相交的物体
         _selected =
           scope.transformGroup === true
-            ? _objects[0] // 如果transformGroup为true，则选中第一个物体
-            : _intersections[0].object; // 否则选中第一个相交的物体
-        if (targetPlane) { // 如果有目标平面
+            ? _objects[0]
+            : _intersections[0].object;
+        /******* modify: 增加targetPlane判定 *******/
+        if (targetPlane) {
+          // 如果有目标平面
           _plane = targetPlane; // 使用目标平面
         } else {
-          _plane.setFromNormalAndCoplanarPoint( // 根据相机的朝向和物体的世界坐标创建平面
+          _plane.setFromNormalAndCoplanarPoint(
+            // 根据相机的朝向和物体的世界坐标创建平面
             _camera.getWorldDirection(_plane.normal),
             _worldPosition.setFromMatrixPosition(_selected.matrixWorld)
           );
         }
-        if (_raycaster.ray.intersectPlane(_plane, _intersection)) { // 射线与平面相交
+        if (_raycaster.ray.intersectPlane(_plane, _intersection)) {
+          // 射线与平面相交
           _inverseMatrix.copy(_selected.parent.matrixWorld).invert(); // 复制选中物体的父级世界矩阵并求逆矩阵
           _offset
             .copy(_intersection)
@@ -154,13 +184,19 @@ class DragControls extends EventDispatcher {
 
         _domElement.style.cursor = "move"; // 设置鼠标样式为移动
 
-        scope.dispatchEvent({ type: "dragstart", object: _selected }); // 分发dragstart事件
+        scope.dispatchEvent({
+          type: "dragstart",
+          object: _selected,
+          /******* modify: 增加点击参数用来判断是否 */
+          intersections: _intersections,
+        }); // 分发dragstart事件
       }
     }
     function onPointerCancel() {
       if (scope.enabled === false) return; // 如果DragControls被禁用，则直接返回
 
-      if (_selected) { // 如果有选中的物体
+      if (_selected) {
+        // 如果有选中的物体
         scope.dispatchEvent({ type: "dragend", object: _selected }); // 分发dragend事件
 
         _selected = null; // 清空选中的物体
@@ -191,4 +227,3 @@ class DragControls extends EventDispatcher {
 }
 
 export { DragControls };
-

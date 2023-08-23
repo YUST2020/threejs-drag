@@ -11,8 +11,8 @@ import {
   CSS3DRenderer,
   CSS3DObject,
 } from "three/examples/jsm/renderers/CSS3DRenderer.js";
-import Obj from "./obj";
-import SharpObj from "./sharpObj";
+import Obj from "./class/obj";
+import SharpObj from "./class/sharpObj";
 export default class Four {
   constructor(dom) {
     this.dom = dom; // 外围dom元素
@@ -102,8 +102,17 @@ export default class Four {
       [10, 0, 5],
     ];
     for (let p of pos) {
-      let obj = new SharpObj(...p, { renderer: this.renderer, controls: this.controls, camera: this.camera })
-      obj = obj.object
+      let options = {
+        renderer: this.renderer,
+        controls: this.controls,
+        camera: this.camera,
+        scene: this.scene,
+      };
+      let obj =
+        Math.random() > 0.5
+          ? new SharpObj(...p, options)
+          : new Obj(...p, options);
+      obj = obj.object;
       this.objs.push(obj);
       this.scene.add(obj);
     }

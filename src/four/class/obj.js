@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
-import { DragControls } from "./DragControls";
+import { DragControls } from "../DragControls";
+import Arrow from "./arrow";
 export default class Obj {
   object;
   dragControls;
@@ -9,30 +10,25 @@ export default class Obj {
     this.options = options;
     // 设置形状材质
     const geometry = new THREE.SphereGeometry(1, 32, 32);
-    const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const material = new THREE.MeshMatcapMaterial({ color: 0xff0000 });
     this.object = new THREE.Mesh(geometry, material);
-
-    const wireframe = new THREE.WireframeGeometry(geometry);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-    const wireframeLine = new THREE.LineSegments(wireframe, lineMaterial);
-    this.object.add(wireframeLine);
 
     const size = this.getSize();
     // 抵消误差
     this.object.position.set(x + size.x / 2, y + size.y / 2, z + size.z / 2);
 
     // 3d标签
-    const positionDiv = document.createElement("div");
-    Object.assign(positionDiv.style, {
-      backgroundColor: "#888888",
-      height: size.x + "px",
-      width: size.z + "px",
-      pointerEvents: "none",
-    });
-    const posObject = new CSS3DObject(positionDiv);
-    posObject.position.set(-size.x, -size.y / 2, 0);
-    posObject.rotation.x = Math.PI / 2;
-    this.object.add(posObject);
+    // const positionDiv = document.createElement("div");
+    // Object.assign(positionDiv.style, {
+    //   backgroundColor: "#888888",
+    //   height: size.x + "px",
+    //   width: size.z + "px",
+    //   pointerEvents: "none",
+    // });
+    // const posObject = new CSS3DObject(positionDiv);
+    // posObject.position.set(-size.x, -size.y / 2, 0);
+    // posObject.rotation.x = Math.PI / 2;
+    // this.object.add(posObject);
 
     // 初始化底部箭头
     const showBottomArrow = () => {};
@@ -78,24 +74,53 @@ export default class Obj {
     selectBoxHelper.isSelectBox = true;
     this.object.add(selectBoxHelper);
   }
-  drag() {
-    console.log(111);
-  }
   initDrag() {
+    // 重复调用判定
     this.dragControls?.deactivate();
+    this.arrowX && this.options.scene.remove(this.arrowX);
+    this.arrowZ && this.options.scene.remove(this.arrowZ);
+
+    const size = this.getSize();
+    // z方向拖拽箭头
+    const { object: arrowZ } = new Arrow();
+    arrowZ.position.copy(this.object.position);
+    arrowZ.rotation.x = Math.PI / 2;
+    arrowZ.position.z += size.z + 0.5;
+    arrowZ.isZDirection = true;
+    this.options.scene.add(arrowZ);
+    // x方向拖拽箭头
+    const { object: arrowX } = new Arrow();
+    arrowX.position.copy(this.object.position);
+    arrowX.rotation.z = -Math.PI / 2;
+    arrowX.position.x += size.x + 0.5;
+    arrowX.isXDirection = true;
+    this.options.scene.add(arrowX);
+
+    // 生成物体运动的平面
     const plane = new THREE.Plane();
     const normal = new THREE.Vector3(0, 1, 0); // x-z平面的法线向量
     const point = new THREE.Vector3(0, 0, 0); // 经过平面的点
     plane.setFromNormalAndCoplanarPoint(normal, point);
+    // 此处第4个参数为修改源码添加的自定义参数，用于指定物体只能在某一个平面上运动
     this.dragControls = new DragControls(
-      [this.object],
+      [this.object, arrowZ, arrowX],
       this.options.camera,
       this.options.renderer.domElement,
-      plane
+      plane,
+      true
     );
     this.dragControls.transformGroup = true;
-    // 拖拽
+    let xInit = null;
+    let zInit = null;
+    // 拖拽事件监听
     this.dragControls.addEventListener("dragstart", (e) => {
+      console.log("dragStart", e.intersections);
+      if (e.intersections[0]?.object?.isXDirection) {
+        zInit = this.object.position.z;
+      }
+      if (e.intersections[0]?.object?.isZDirection) {
+        xInit = this.object.position.x;
+      }
       this.options.controls.enabled = false;
       this.options.controls.enableZoom = false;
       typeof this.dragStart === "function" && this.dragStart(e);
@@ -103,9 +128,26 @@ export default class Obj {
     this.dragControls.addEventListener("dragend", (e) => {
       this.options.controls.enabled = true;
       this.options.controls.enableZoom = true;
+      xInit = null;
+      zInit = null;
       typeof this.dragEnd === "function" && this.dragEnd(e);
     });
     this.dragControls.addEventListener("drag", (e) => {
+      if (typeof xInit === "number") {
+        e.object.position.x = xInit;
+        arrowX.position.x = xInit + size.x + 0.5
+        arrowZ.position.x = xInit
+      }
+      if (typeof zInit === "number") {
+        e.object.position.z = zInit;
+        arrowX.position.z = zInit
+        arrowZ.position.z = zInit + size.x + 0.5
+      }
+      //arrowX.position.copy(e.object.position);
+      // arrowX.position.x += size.x + 0.5;
+      // arrowZ.position.copy(e.object.position);
+      // arrowZ.position.z += size.z + 0.5;
+
       typeof this.drag === "function" && this.drag(e);
     });
     // hover
@@ -121,5 +163,7 @@ export default class Obj {
       }
       typeof this.hoverOff === "function" && this.hoverOff(e);
     });
+    this.arrowX = arrowX;
+    this.arrowZ = arrowZ;
   }
 }
